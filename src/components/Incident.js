@@ -30,7 +30,7 @@ function Incident() {
   const [searchId, setSearchId] = useState('');
   const [formData, setFormData] = useState({
     enterpriseOrGovernment: '',
-    reporterName: '', // This will be auto-filled based on the logged-in user
+    reporterName: '',
     incidentDetails: '',
     priority: 'Low',
     status: 'Open',
@@ -42,14 +42,20 @@ function Incident() {
 
   useEffect(() => {
     if (location && location.state && location.state.currentUser) {
-      // Set reporterName based on currentUser from props.location.state
       setFormData(prevState => ({
         ...prevState,
-        reporterName: location.state.currentUser.username // Assuming username is the field for reporter's name
+        reporterName: location.state.currentUser.username
       }));
       fetchIncidents(location.state.currentUser.id); // Fetch incidents when component mounts
     }
-  }, [location]); // Added location as dependency to rerun if location changes
+  }, [location]);
+
+  useEffect(() => {
+    if (searchId === '') {
+      // If searchId is empty, fetch all incidents
+      fetchIncidents(location.state.currentUser.id);
+    }
+  }, [searchId]);
 
   const fetchIncidents = (userId) => {
     if (!userId) {
@@ -63,20 +69,17 @@ function Incident() {
       })
       .catch(error => {
         if (error.response) {
-          // Server responded with a status other than 200 range
           console.error("Response error:", error.response.data);
         } else if (error.request) {
-          // Request was made but no response received
           console.error("Request error:", error.request);
         } else {
-          // Something else caused an error
           console.error("Error:", error.message);
         }
       });
   };
 
   const generateIncidentId = () => {
-    const randomDigits = Math.floor(10000 + Math.random() * 90000); // Generate random 5-digit number
+    const randomDigits = Math.floor(10000 + Math.random() * 90000);
     const currentYear = new Date().getFullYear();
     return `RMG${randomDigits}${currentYear}`;
   };
@@ -92,19 +95,19 @@ function Incident() {
   const handleSubmit = (e) => {
     e.preventDefault();
     const newIncident = { ...formData, incidentId: generateIncidentId() };
-    const userId = location.state.currentUser.id; // Assuming id is the field for userId
+    const userId = location.state.currentUser.id;
 
     axios.post(`http://localhost:8081/api/incidents/addIncident?userId=${userId}`, newIncident)
       .then(response => {
         setIncidents([...incidents, response.data]);
-        setFormData({
+        setFormData(prevState => ({
+          ...prevState,
           enterpriseOrGovernment: '',
-          reporterName: '',
           incidentDetails: '',
           priority: 'Low',
           status: 'Open',
           incidentId: ''
-        });
+        }));
       })
       .catch(error => {
         if (error.response) {
@@ -136,30 +139,30 @@ function Incident() {
   const handleSearch = (e) => {
     e.preventDefault();
 
-    if (!searchId) {
-      console.error("Search ID is empty");
-      return;
+    if (searchId === '') {
+      // If searchId is empty, fetch all incidents
+      fetchIncidents(location.state.currentUser.id);
+    } else {
+      axios.get(`http://localhost:8081/api/incidents/search?incidentId=${searchId}`)
+        .then(response => {
+          setIncidents([response.data]);
+        })
+        .catch(error => {
+          if (error.response) {
+            console.error("Response error:", error.response.data);
+          } else if (error.request) {
+            console.error("Request error:", error.request);
+          } else {
+            console.error("Error:", error.message);
+          }
+        });
     }
-
-    axios.get(`http://localhost:8081/api/incidents/search?incidentId=${searchId}`)
-      .then(response => {
-        setIncidents([response.data]);
-      })
-      .catch(error => {
-        if (error.response) {
-          console.error("Response error:", error.response.data);
-        } else if (error.request) {
-          console.error("Request error:", error.request);
-        } else {
-          console.error("Error:", error.message);
-        }
-      });
   };
 
   const openEditModal = (incident) => {
     setSelectedIncident({
       ...incident,
-      incidentReportedDateTime: new Date(incident.incidentReportedDateTime).toISOString() // Ensure ISO 8601 format
+      incidentReportedDateTime: new Date(incident.incidentReportedDateTime).toISOString()
     });
     setEditModalOpen(true);
   };
@@ -181,22 +184,21 @@ function Incident() {
       reporterName: selectedIncident.reporterName,
       incidentDetails: selectedIncident.incidentDetails,
       enterpriseOrGovernment: selectedIncident.enterpriseOrGovernment,
-      incidentReportedDateTime: selectedIncident.incidentReportedDateTime, // Ensure this is an ISO 8601 string
+      incidentReportedDateTime: selectedIncident.incidentReportedDateTime,
       priority: selectedIncident.priority,
       status: selectedIncident.status,
       user: {
-        id: location.state.currentUser.id // Assuming id is the field for userId
+        id: location.state.currentUser.id
       }
     };
 
     axios.put(`http://localhost:8081/api/incidents/update`, updatedIncident)
       .then(response => {
-        // Update incidents state with updated incident
         const updatedIncidents = incidents.map(incident =>
           incident.id === response.data.id ? response.data : incident
         );
         setIncidents(updatedIncidents);
-        closeEditModal(); // Close the edit modal after successful update
+        closeEditModal();
       })
       .catch(error => {
         if (error.response) {
@@ -234,7 +236,7 @@ function Incident() {
               name="reporterName"
               label="Reporter Name"
               value={formData.reporterName}
-              disabled // Auto-filled based on the logged-in user
+              disabled
             />
             <TextField
               fullWidth
@@ -264,7 +266,7 @@ function Incident() {
                 name="status"
                 value={formData.status}
                 onChange={handleCreateChange}
-                disabled={formData.status === "Closed"} // Disable if status is Closed
+                disabled={formData.status === "Closed"}
               >
                 <MenuItem value="Open">Open</MenuItem>
                 <MenuItem value="In progress">In progress</MenuItem>
@@ -323,7 +325,6 @@ function Incident() {
                 >
                   <Delete />
                 </IconButton>
-
               </ListItem>
             ))}
           </List>
@@ -355,7 +356,7 @@ function Incident() {
                 name="reporterName"
                 label="Reporter Name"
                 value={selectedIncident ? selectedIncident.reporterName : ''}
-                disabled // Assuming reporterName is not editable
+                disabled
               />
               <TextField
                 fullWidth
@@ -396,7 +397,7 @@ function Incident() {
                   name="status"
                   value={selectedIncident ? selectedIncident.status : ''}
                   onChange={handleEditChange}
-                  disabled={selectedIncident && selectedIncident.status === "Closed"} // Disable if status is Closed
+                  disabled={selectedIncident && selectedIncident.status === "Closed"}
                 >
                   <MenuItem value="Open">Open</MenuItem>
                   <MenuItem value="In progress">In progress</MenuItem>
